@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  # 1. vLLM 고성능 추론 서버 (Ollama 대신)
+  vllm:
+    image: vllm/vllm-openai:latest
+    container_name: vllm_server
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    command: >
+      --model meta-llama/Llama-3-8B-Instruct
+      --tensor-parallel-size 1
+      --host 0.0.0.0
+    volumes:
+      - vllm_models:/root/.cache/huggingface
+    restart: always
+
+  # 2. FastAPI 인증 게이트웨이
+  fastapi_app:
+    build: ./fastapi_app
+    container_name: fastapi_gateway
+    volumes:
+      - api_db_data:/app/database
+    depends_on:
+      - vllm
+    restart: always
+
+  # 3. Nginx 리버스 프록시 (변경 없음)
+  nginx:
+    image: nginx:latest
+    container_name: nginx_proxy
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - fastapi_app
+    restart: always
+
+volumes:
+  vllm_models:
+  api_db_data:
