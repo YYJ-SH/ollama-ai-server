@@ -1,0 +1,36 @@
+version: '3.8'
+
+services:
+  # 1. Ollama AI 모델 서버
+  ollama:
+    image: ollama/ollama
+    container_name: ollama_server
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: always
+
+  # 2. FastAPI 인증 게이트웨이
+  fastapi_app:
+    build: ./fastapi_app
+    container_name: fastapi_gateway
+    ports:
+      # 서버의 8000번 포트를 컨테이너의 8000번 포트와 연결
+      - "8000:8000"
+    volumes:
+      - api_db_data:/app/database # DB 파일 저장용 볼륨 연결
+    depends_on:
+      - ollama
+    restart: always
+
+volumes:
+  ollama_data:
+    driver: local
+  api_db_data:
+    driver: local

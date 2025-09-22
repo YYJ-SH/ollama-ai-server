@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  # 1. Ollama AI 모델 서버
+  ollama:
+    image: ollama/ollama
+    container_name: ollama_server
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: always
+
+  # 2. FastAPI 인증 게이트웨이 (ports 부분 없음)
+  fastapi_app:
+    build: ./fastapi_app
+    container_name: fastapi_gateway
+    volumes:
+      - api_db_data:/app/database
+    depends_on:
+      - ollama
+    restart: always
+
+  # 3. Nginx 리버스 프록시
+  nginx:
+    image: nginx:latest
+    container_name: nginx_proxy
+    ports:
+      # 서버의 80번 포트를 Nginx 컨테이너의 80번 포트와 연결
+      - "80:80"
+      # 추후 HTTPS 적용 시: - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - fastapi_app
+    restart: always
+
+volumes:
+  ollama_data:
+    driver: local
+  api_db_data:
+    driver: local
