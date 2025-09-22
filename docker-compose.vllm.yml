@@ -5,6 +5,8 @@ services:
   vllm:
     image: vllm/vllm-openai:latest
     container_name: vllm_server
+    environment:
+      - HF_TOKEN=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
     deploy:
       resources:
         reservations:
