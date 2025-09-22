@@ -2,4 +2,4 @@
 FROM llama3:8b-instruct-q4_K_M
 
 # GPU에 올릴 레이어의 수를 지정. 이 숫자로 성능과 품질을 조절.
-PARAMETER num_gpu_layers 25
+PARAMETER num_gpu 25

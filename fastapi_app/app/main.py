@@ -42,9 +42,6 @@ async def generate_completion(
     request: models.OllamaRequest,
     api_key: dict = Depends(get_valid_api_key)
 ):
-    """
-    요청된 모델을 사용하여 텍스트 생성을 수행합니다.
-    """
     request_payload = request.model_dump()
     async with httpx.AsyncClient() as client:
         try:
@@ -54,6 +51,20 @@ async def generate_completion(
                 timeout=180.0
             )
             response.raise_for_status()
-            return response.json()
+            response_data = response.json()
+
+            # --- 👇 [신규] 응답 성공 시 DB에 로그 기록 ---
+            try:
+                ai_response_text = response_data.get("response", "")
+                await database.add_api_log(
+                    owner=api_key.get("owner", "unknown"),
+                    model=request.model,
+                    prompt=request.prompt,
+                    response=ai_response_text
+                )
+            except Exception as log_e:
+                print(f"로그 기록 중 에러 발생: {log_e}")
+
+            return response_data
         except httpx.RequestError as e:
             raise HTTPException(status_code=500, detail=f"Error connecting to Ollama: {e}")
