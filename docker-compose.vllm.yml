@@ -13,7 +13,7 @@ services:
               count: 1
               capabilities: [gpu]
     command: >
-      --model meta-llama/Llama-3-8B-Instruct
+      --model meta-llama/Meta-Llama-3-8B-Instruct
       --tensor-parallel-size 1
       --host 0.0.0.0
     volumes:
