@@ -42,18 +42,24 @@ async def generate_completion(
     request: models.OllamaRequest,
     api_key: dict = Depends(get_valid_api_key)
 ):
-    request_payload = request.model_dump()
+    # Ollama 고유 포맷으로 요청 본문 구성
+    ollama_payload = {
+        "model": request.model,
+        "prompt": request.prompt,
+        "stream": request.stream
+    }
+
     async with httpx.AsyncClient() as client:
         try:
             response = await client.post(
-                f"{config.OLLAMA_BASE_URL}/api/generate",
-                json=request_payload,
+                f"{config.OLLAMA_BASE_URL}/api/generate",  # ✅ 이 경로가 Ollama native API
+                json=ollama_payload,
                 timeout=180.0
             )
             response.raise_for_status()
             response_data = response.json()
 
-            # --- 👇 [신규] 응답 성공 시 DB에 로그 기록 ---
+            # ✅ 응답에서 텍스트 추출 후 DB 로그 기록
             try:
                 ai_response_text = response_data.get("response", "")
                 await database.add_api_log(
@@ -68,3 +74,4 @@ async def generate_completion(
             return response_data
         except httpx.RequestError as e:
             raise HTTPException(status_code=500, detail=f"Error connecting to Ollama: {e}")
+
