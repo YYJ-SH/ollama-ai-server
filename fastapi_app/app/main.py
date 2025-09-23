@@ -1,252 +1,268 @@
-# qwen_remote_client_test.py - GPU 서버 테스트용
-
-import requests
+import httpx
 import base64
-import time
-from PIL import ImageGrab
-import os
+from fastapi import FastAPI, HTTPException, Header, Depends, UploadFile, File
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+from typing import Optional, List
+from . import config, database, models
 
-class QwenRemoteClient:
-    """원격 Qwen2.5-VL 서버 클라이언트"""
-    
-    def __init__(self, server_url: str, api_key: str):
-        self.server_url = server_url.rstrip('/')
-        self.api_key = api_key
-        self.headers = {
-            'X-API-Key': api_key,
-            'Content-Type': 'application/json'
-        }
-    
-    def test_connection(self):
-        """서버 연결 테스트"""
+app = FastAPI(
+    title="Custom AI API Server with Qwen2.5-VL",
+    description="A secure gateway to Ollama models with API key authentication + Qwen2.5-VL OCR endpoint."
+)
+
+# 서버 시작 시 DB 초기화
+@app.on_event("startup")
+def on_startup():
+    database.init_db()
+
+# API 키 검증을 위한 의존성 주입
+async def get_valid_api_key(x_api_key: str = Header(..., description="Your personal API Key.")):
+    if not x_api_key:
+        raise HTTPException(status_code=401, detail="API Key is missing")
+    key_info = await database.validate_and_log_key(x_api_key)
+    if not key_info:
+        raise HTTPException(status_code=401, detail="Invalid or Inactive API Key")
+    print(f"Request from '{key_info['owner']}' (Key: ...{x_api_key[-4:]})")
+    return key_info
+
+# [기존] 사용 가능한 모델 리스트 API
+@app.get("/v1/models", tags=["Models"])
+async def list_available_models(api_key: dict = Depends(get_valid_api_key)):
+    """
+    Ollama 서버에 다운로드된 사용 가능한 모든 모델의 목록을 반환합니다.
+    """
+    async with httpx.AsyncClient() as client:
         try:
-            response = requests.get(
-                f"{self.server_url}/v1/qwen/health",
-                headers=self.headers,
-                timeout=10
+            response = await client.get(f"{config.OLLAMA_BASE_URL}/api/tags")
+            response.raise_for_status()
+            return response.json()
+        except httpx.RequestError as e:
+            raise HTTPException(status_code=500, detail=f"Could not connect to Ollama: {e}")
+
+# [기존] 메인 생성 API
+@app.post("/v1/generate", tags=["Generation"])
+async def generate_completion(
+    request: models.OllamaRequest,
+    api_key: dict = Depends(get_valid_api_key)
+):
+    # Ollama 고유 포맷으로 요청 본문 구성
+    ollama_payload = {
+        "model": request.model,
+        "prompt": request.prompt,
+        "stream": request.stream
+    }
+
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(
+                f"{config.OLLAMA_BASE_URL}/api/generate",  # ✅ 이 경로가 Ollama native API
+                json=ollama_payload,
+                timeout=180.0
             )
-            
-            if response.status_code == 200:
-                data = response.json()
-                print("✅ 서버 연결 성공!")
-                print(f"📊 상태: {data.get('status')}")
-                print(f"🤖 사용가능한 Qwen 모델: {data.get('available_qwen_models', [])}")
-                return True
-            else:
-                print(f"❌ 서버 응답 오류: {response.status_code}")
-                print(f"📝 응답: {response.text}")
-                return False
-                
-        except Exception as e:
-            print(f"❌ 연결 실패: {e}")
-            return False
-    
-    def image_to_base64(self, image_path: str) -> str:
-        """이미지 파일을 base64로 인코딩"""
-        try:
-            with open(image_path, "rb") as img_file:
-                return base64.b64encode(img_file.read()).decode('utf-8')
-        except Exception as e:
-            print(f"이미지 인코딩 실패: {e}")
-            return ""
-    
-    def screenshot_to_base64(self, bbox=None) -> str:
-        """스크린샷을 찍고 base64로 인코딩"""
-        try:
-            screenshot = ImageGrab.grab(bbox=bbox)
-            temp_path = "temp_screenshot.png"
-            screenshot.save(temp_path)
-            
-            base64_str = self.image_to_base64(temp_path)
-            os.remove(temp_path)  # 임시 파일 삭제
-            
-            return base64_str
-        except Exception as e:
-            print(f"스크린샷 실패: {e}")
-            return ""
-    
-    def ocr_from_base64(self, image_base64: str, prompt: str = None, model: str = "qwen2.5vl:7b") -> dict:
-        """Base64 이미지로 OCR 요청"""
-        if not prompt:
-            prompt = "이 이미지의 모든 텍스트를 정확히 읽어주세요. 한국어, 영어, 숫자를 모두 포함해서 줄바꿈도 유지해주세요."
-        
-        payload = {
-            "image_base64": image_base64,
-            "prompt": prompt,
-            "model": model,
-            "temperature": 0.1,
-            "top_p": 0.9
-        }
-        
-        try:
-            start_time = time.time()
-            response = requests.post(
-                f"{self.server_url}/v1/qwen/ocr",
-                json=payload,
-                headers=self.headers,
-                timeout=60
-            )
-            
-            request_time = (time.time() - start_time) * 1000
-            
-            if response.status_code == 200:
-                result = response.json()
-                print(f"✅ OCR 성공! (요청시간: {request_time:.0f}ms, 처리시간: {result.get('processing_time_ms', 0)}ms)")
-                print(f"📝 결과: {result.get('ocr_text', '')}")
-                return result
-            else:
-                print(f"❌ OCR 실패: {response.status_code}")
-                print(f"📝 에러: {response.text}")
-                return {"success": False, "error": response.text}
-                
-        except Exception as e:
-            print(f"❌ OCR 요청 실패: {e}")
-            return {"success": False, "error": str(e)}
-    
-    def ocr_from_file(self, file_path: str, prompt: str = None) -> dict:
-        """파일 업로드 방식 OCR 요청"""
-        if not os.path.exists(file_path):
-            return {"success": False, "error": "File not found"}
-        
-        try:
-            with open(file_path, 'rb') as f:
-                files = {'file': (os.path.basename(file_path), f, 'image/png')}
-                data = {
-                    'prompt': prompt or "이 이미지의 모든 텍스트를 정확히 읽어주세요.",
-                    'model': 'qwen2.5vl:7b',  # 수정: 콜론 제거
-                    'temperature': 0.1,
-                    'top_p': 0.9
-                }
-                
-                response = requests.post(
-                    f"{self.server_url}/v1/qwen/ocr-file",
-                    files=files,
-                    data=data,
-                    headers={'X-API-Key': self.api_key},  # Content-Type은 자동 설정됨
-                    timeout=60
+            response.raise_for_status()
+            response_data = response.json()
+
+            # ✅ 응답에서 텍스트 추출 후 DB 로그 기록
+            try:
+                ai_response_text = response_data.get("response", "")
+                await database.add_api_log(
+                    owner=api_key.get("owner", "unknown"),
+                    model=request.model,
+                    prompt=request.prompt,
+                    response=ai_response_text
                 )
-            
-            if response.status_code == 200:
+            except Exception as log_e:
+                print(f"로그 기록 중 에러 발생: {log_e}")
+
+            return response_data
+        except httpx.RequestError as e:
+            raise HTTPException(status_code=500, detail=f"Error connecting to Ollama: {e}")
+
+
+# ==================== 🔥 NEW: Qwen2.5-VL OCR 전용 엔드포인트 ====================
+
+class QwenOCRRequest(BaseModel):
+    """Qwen2.5-VL OCR 요청 모델"""
+    image_base64: str
+    prompt: Optional[str] = "이 이미지의 모든 텍스트를 정확히 읽어주세요. 한국어, 영어, 숫자를 모두 포함해서 줄바꿈도 유지해주세요."
+    model: Optional[str] = "qwen2.5-vl:7b"
+    temperature: Optional[float] = 0.1
+    top_p: Optional[float] = 0.9
+
+class QwenOCRResponse(BaseModel):
+    """Qwen2.5-VL OCR 응답 모델"""
+    success: bool
+    ocr_text: str
+    model_used: str
+    processing_time_ms: float
+    error: Optional[str] = None
+
+@app.post("/v1/qwen/ocr", tags=["Qwen2.5-VL"], response_model=QwenOCRResponse)
+async def qwen_ocr_endpoint(
+    request: QwenOCRRequest,
+    api_key: dict = Depends(get_valid_api_key)
+):
+    """
+    Qwen2.5-VL을 사용한 고성능 OCR 엔드포인트
+    
+    - 한국어 최적화
+    - Base64 이미지 입력
+    - 빠른 응답 시간
+    - 커스텀 프롬프트 지원
+    """
+    import time
+    start_time = time.time()
+    
+    try:
+        # Qwen2.5-VL 전용 페이로드 구성
+        qwen_payload = {
+            "model": request.model,
+            "prompt": request.prompt,
+            "images": [request.image_base64],
+            "stream": False,
+            "options": {
+                "temperature": request.temperature,
+                "top_p": request.top_p
+            }
+        }
+        
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            try:
+                response = await client.post(
+                    f"{config.OLLAMA_BASE_URL}/api/generate",
+                    json=qwen_payload,
+                    headers={'Content-Type': 'application/json'}
+                )
+                response.raise_for_status()
                 result = response.json()
-                print(f"✅ 파일 OCR 성공! (처리시간: {result.get('processing_time_ms', 0)}ms)")
-                print(f"📝 결과: {result.get('ocr_text', '')}")
-                return result
-            else:
-                print(f"❌ 파일 OCR 실패: {response.status_code}")
-                return {"success": False, "error": response.text}
                 
-        except Exception as e:
-            print(f"❌ 파일 OCR 요청 실패: {e}")
-            return {"success": False, "error": str(e)}
-
-
-def main():
-    # 🔧 설정 (여기를 수정하세요!)
-    SERVER_URL = "http://your-gpu-server.com:8000"  # 여기에 실제 서버 주소
-    API_KEY = "your-api-key-here"  # 여기에 실제 API 키
-    
-    print("🔥 Qwen2.5-VL 원격 서버 테스트 시작!")
-    print("=" * 50)
-    
-    client = QwenRemoteClient(SERVER_URL, API_KEY)
-    
-    # 1. 서버 연결 테스트
-    print("1️⃣ 서버 연결 테스트...")
-    if not client.test_connection():
-        print("❌ 서버에 연결할 수 없습니다. 설정을 확인하세요.")
-        return
-    
-    print("\n" + "=" * 50)
-    
-    # 2. 스크린샷 OCR 테스트
-    print("2️⃣ 스크린샷 OCR 테스트 (3초 후 전체 화면 캡처)")
-    time.sleep(3)
-    
-    screenshot_b64 = client.screenshot_to_base64()
-    if screenshot_b64:
-        print("📸 스크린샷 캡처 완료!")
-        result = client.ocr_from_base64(screenshot_b64, "이 화면에서 모든 텍스트를 찾아 읽어주세요.")
-        
-        if result.get('success'):
-            print(f"🎯 OCR 결과 길이: {len(result.get('ocr_text', ''))} 글자")
-    
-    print("\n" + "=" * 50)
-    
-    # 3. 특정 영역 OCR 테스트 (화면 중앙 400x300)
-    print("3️⃣ 화면 중앙 부분 OCR 테스트")
-    
-    # 화면 중앙 영역 계산
-    import win32api
-    screen_width = win32api.GetSystemMetrics(0)
-    screen_height = win32api.GetSystemMetrics(1)
-    
-    center_x, center_y = screen_width // 2, screen_height // 2
-    bbox = (center_x - 200, center_y - 150, center_x + 200, center_y + 150)
-    
-    partial_b64 = client.screenshot_to_base64(bbox=bbox)
-    if partial_b64:
-        print(f"📸 부분 스크린샷 캡처 완료! ({bbox})")
-        result = client.ocr_from_base64(
-            partial_b64, 
-            "이 이미지에서 버튼, 링크, 메뉴 등 클릭 가능한 UI 요소의 텍스트를 읽어주세요."
+                processing_time = (time.time() - start_time) * 1000
+                ocr_text = result.get("response", "").strip()
+                
+                if not ocr_text:
+                    ocr_text = "[No text detected]"
+                
+                # DB 로그 기록 (선택사항)
+                try:
+                    await database.add_api_log(
+                        owner=api_key.get("owner", "unknown"),
+                        model=request.model,
+                        prompt=f"[OCR] {request.prompt[:100]}...",
+                        response=ocr_text[:500]  # OCR 결과는 길 수 있으니 500자만
+                    )
+                except Exception as log_e:
+                    print(f"OCR 로그 기록 중 에러: {log_e}")
+                
+                return QwenOCRResponse(
+                    success=True,
+                    ocr_text=ocr_text,
+                    model_used=request.model,
+                    processing_time_ms=round(processing_time, 2),
+                    error=None
+                )
+                
+            except httpx.TimeoutException:
+                return QwenOCRResponse(
+                    success=False,
+                    ocr_text="",
+                    model_used=request.model,
+                    processing_time_ms=round((time.time() - start_time) * 1000, 2),
+                    error="OCR processing timeout (60s exceeded)"
+                )
+            except httpx.RequestError as e:
+                return QwenOCRResponse(
+                    success=False,
+                    ocr_text="",
+                    model_used=request.model,
+                    processing_time_ms=round((time.time() - start_time) * 1000, 2),
+                    error=f"Network error: {str(e)}"
+                )
+                
+    except Exception as e:
+        return QwenOCRResponse(
+            success=False,
+            ocr_text="",
+            model_used=request.model,
+            processing_time_ms=round((time.time() - start_time) * 1000, 2),
+            error=f"Server error: {str(e)}"
         )
-    
-    print("\n" + "=" * 50)
-    
-    # 4. 파일 업로드 OCR 테스트 (옵션)
-    test_file = input("4️⃣ 테스트할 이미지 파일 경로 (Enter로 스킵): ").strip()
-    if test_file and os.path.exists(test_file):
-        print(f"📁 파일 OCR 테스트: {test_file}")
-        result = client.ocr_from_file(test_file, "이 이미지의 모든 내용을 자세히 읽어주세요.")
-    
-    print("\n✅ 테스트 완료!")
 
-# 간단한 성능 벤치마크 함수
-def benchmark_test():
-    """성능 벤치마크 테스트"""
-    SERVER_URL = "http://your-gpu-server.com:8000"  
-    API_KEY = "your-api-key-here"  
+@app.post("/v1/qwen/ocr-file", tags=["Qwen2.5-VL"], response_model=QwenOCRResponse)
+async def qwen_ocr_file_upload(
+    file: UploadFile = File(..., description="이미지 파일 (PNG, JPG, JPEG)"),
+    prompt: str = "이 이미지의 모든 텍스트를 정확히 읽어주세요. 한국어, 영어, 숫자를 모두 포함해서 줄바꿈도 유지해주세요.",
+    model: str = "qwen2.5-vl:7b",
+    temperature: float = 0.1,
+    top_p: float = 0.9,
+    api_key: dict = Depends(get_valid_api_key)
+):
+    """
+    파일 업로드 방식의 Qwen2.5-VL OCR 엔드포인트
+    """
+    import time
+    start_time = time.time()
     
-    client = QwenRemoteClient(SERVER_URL, API_KEY)
+    # 파일 타입 검증
+    if not file.content_type.startswith('image/'):
+        raise HTTPException(status_code=400, detail="Only image files are supported")
     
-    if not client.test_connection():
-        return
-    
-    print("🏃‍♂️ 성능 벤치마크 시작 (10회 테스트)")
-    
-    screenshot_b64 = client.screenshot_to_base64()
-    if not screenshot_b64:
-        print("❌ 스크린샷 실패")
-        return
-    
-    times = []
-    for i in range(10):
-        print(f"테스트 {i+1}/10...", end=" ")
-        start = time.time()
-        result = client.ocr_from_base64(screenshot_b64)
-        end = time.time()
+    try:
+        # 파일을 base64로 인코딩
+        file_content = await file.read()
+        image_base64 = base64.b64encode(file_content).decode('utf-8')
         
-        if result.get('success'):
-            total_time = (end - start) * 1000
-            times.append(total_time)
-            print(f"✅ {total_time:.0f}ms")
-        else:
-            print("❌ 실패")
-    
-    if times:
-        avg_time = sum(times) / len(times)
-        min_time = min(times)
-        max_time = max(times)
+        # 기존 OCR 엔드포인트 재사용
+        request_obj = QwenOCRRequest(
+            image_base64=image_base64,
+            prompt=prompt,
+            model=model,
+            temperature=temperature,
+            top_p=top_p
+        )
         
-        print(f"\n📊 성능 결과:")
-        print(f"평균: {avg_time:.0f}ms")
-        print(f"최소: {min_time:.0f}ms")
-        print(f"최대: {max_time:.0f}ms")
+        # 내부적으로 qwen_ocr_endpoint 호출
+        return await qwen_ocr_endpoint(request_obj, api_key)
+        
+    except Exception as e:
+        return QwenOCRResponse(
+            success=False,
+            ocr_text="",
+            model_used=model,
+            processing_time_ms=round((time.time() - start_time) * 1000, 2),
+            error=f"File processing error: {str(e)}"
+        )
 
-if __name__ == "__main__":
-    choice = input("테스트 모드 선택 (1: 일반테스트, 2: 벤치마크): ").strip()
-    
-    if choice == "2":
-        benchmark_test()
-    else:
-        main()
+@app.get("/v1/qwen/health", tags=["Qwen2.5-VL"])
+async def qwen_health_check(api_key: dict = Depends(get_valid_api_key)):
+    """
+    Qwen2.5-VL 모델 상태 확인
+    """
+    async with httpx.AsyncClient() as client:
+        try:
+            # 사용 가능한 모델 확인
+            response = await client.get(f"{config.OLLAMA_BASE_URL}/api/tags")
+            models_data = response.json()
+            
+            qwen_models = [
+                model for model in models_data.get("models", [])
+                if "qwen2.5-vl" in model.get("name", "").lower()
+            ]
+            
+            return {
+                "status": "healthy" if qwen_models else "no_qwen_models",
+                "available_qwen_models": [m["name"] for m in qwen_models],
+                "recommended_model": "qwen2.5-vl:7b",
+                "endpoints": [
+                    "/v1/qwen/ocr",
+                    "/v1/qwen/ocr-file",
+                    "/v1/qwen/health"
+                ]
+            }
+            
+        except Exception as e:
+            return {
+                "status": "error",
+                "error": str(e),
+                "message": "Could not connect to Ollama server"
+            }
