@@ -25,12 +25,11 @@ def add_key(owner):
     init_db_path()
     new_key = generate_api_key()
     conn = sqlite3.connect(DATABASE_FILE)
-    # DB가 없으면 생성하는 로직도 필요합니다.
     cursor = conn.cursor()
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS api_keys (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            key TEXT NOT NULL UNIQUE,
+            api_key TEXT NOT NULL UNIQUE,
             owner TEXT NOT NULL,
             is_active BOOLEAN NOT NULL DEFAULT 1,
             created_at TEXT NOT NULL,
@@ -39,7 +38,7 @@ def add_key(owner):
     ''')
     try:
         cursor.execute(
-            "INSERT INTO api_keys (key, owner, created_at) VALUES (?, ?, ?)",
+            "INSERT INTO api_keys (api_key, owner, created_at) VALUES (?, ?, ?)",
             (new_key, owner, datetime.now().isoformat())
         )
         conn.commit()
@@ -49,16 +48,16 @@ def add_key(owner):
     finally:
         conn.close()
 
-def revoke_key(key):
+def revoke_key(api_key):
     """Revokes an existing API key."""
     conn = sqlite3.connect(DATABASE_FILE)
     cursor = conn.cursor()
-    cursor.execute("UPDATE api_keys SET is_active = 0 WHERE key = ?", (key,))
+    cursor.execute("UPDATE api_keys SET is_active = 0 WHERE api_key = ?", (api_key,))
     conn.commit()
     if cursor.rowcount > 0:
-        print(f"🔑 Key '{key}' has been revoked.")
+        print(f"🔑 Key '{api_key}' has been revoked.")
     else:
-        print(f"⚠️ Key '{key}' not found.")
+        print(f"⚠️ Key '{api_key}' not found.")
     conn.close()
 
 def list_keys():
@@ -74,7 +73,7 @@ def list_keys():
         print("--- API Keys ---")
         for key in keys:
             status = "Active" if key['is_active'] else "Inactive"
-            print(f"Owner: {key['owner']:<15} | Key: {key['key']:<20} | Status: {status:<10} | Requests: {key['request_count']}")
+            print(f"Owner: {key['owner']:<15} | Key: {key['api_key']:<20} | Status: {status:<10} | Requests: {key['request_count']}")
         print("----------------")
     except sqlite3.OperationalError:
         print("⚠️ No keys found or database not initialized. Please add a key first.")
@@ -88,7 +87,7 @@ if __name__ == "__main__":
     parser_add.add_argument("owner", type=str, help="The owner of the key (e.g., 'project_x').")
 
     parser_revoke = subparsers.add_parser("revoke", help="Revoke an existing API key.")
-    parser_revoke.add_argument("key", type=str, help="The API key to revoke.")
+    parser_revoke.add_argument("api_key", type=str, help="The API key to revoke.")
 
     parser_list = subparsers.add_parser("list", help="List all API keys.")
 
@@ -97,6 +96,6 @@ if __name__ == "__main__":
     if args.command == "add":
         add_key(args.owner)
     elif args.command == "revoke":
-        revoke_key(args.key)
+        revoke_key(args.api_key)
     elif args.command == "list":
         list_keys()
