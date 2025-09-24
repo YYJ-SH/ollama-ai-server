@@ -127,7 +127,7 @@ async def qwen_ocr_endpoint(
             }
         }
         
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=120.0) as client:
             try:
                 response = await client.post(
                     f"{config.OLLAMA_BASE_URL}/api/generate",
@@ -168,7 +168,7 @@ async def qwen_ocr_endpoint(
                     ocr_text="",
                     model_used=request.model,
                     processing_time_ms=round((time.time() - start_time) * 1000, 2),
-                    error="OCR processing timeout (60s exceeded)"
+                    error="OCR processing timeout (120s exceeded)"
                 )
             except httpx.RequestError as e:
                 return QwenOCRResponse(
