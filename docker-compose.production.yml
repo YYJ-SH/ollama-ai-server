@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  # GPU 0용 Ollama - llama3, qwen
+  # GPU 0용 Ollama - llama3, qwen, exaone
   ollama_gpu0:
     image: ollama/ollama
     container_name: ollama_gpu0
@@ -13,7 +13,7 @@ services:
               device_ids: ['0']
               capabilities: [gpu]
     ports:
-      - "11434:11434"
+      - "11436:11434"  # 외부 포트 11436으로 변경 (11434 충돌 회피)
     volumes:
       - ollama_gpu0_data:/root/.ollama
     restart: always
@@ -30,7 +30,7 @@ services:
               device_ids: ['1']
               capabilities: [gpu]
     ports:
-      - "11435:11434"  # 내부 11434 → 외부 11435로 매핑
+      - "11435:11434"
     volumes:
       - ollama_gpu1_data:/root/.ollama
     restart: always
