@@ -2,7 +2,7 @@
 
 # 모델에 따라 다른 Ollama 서버로 라우팅
 OLLAMA_ENDPOINTS = {
-    "llama3:7b": "http://ollama_gpu0:11434",
+    "llama3:latest": "http://ollama_gpu0:11434",
     "qwen2.5vl:7b": "http://ollama_gpu0:11434",
     "exaone3.5:7.8b": "http://ollama_gpu0:11434",
     "gpt-oss:20b": "http://ollama_gpu1:11434"
