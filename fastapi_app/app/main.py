@@ -46,29 +46,38 @@ async def generate_completion(
     request: models.OllamaRequest,
     api_key: dict = Depends(get_valid_api_key)
 ):
-    # Ollama 고유 포맷으로 요청 본문 구성
+    model_name = request.model.strip().lower()
+
+    if model_name not in config.SUPPORTED_MODELS:
+        raise HTTPException(status_code=400, detail=f"지원하지 않는 모델입니다: {model_name}")
+
+    endpoint = config.OLLAMA_ENDPOINTS.get(model_name)
+    if not endpoint:
+        raise HTTPException(status_code=500, detail=f"모델 '{model_name}'에 대한 Ollama 엔드포인트를 찾을 수 없습니다.")
+
     ollama_payload = {
-        "model": request.model,
+        "model": model_name,
         "prompt": request.prompt,
-        "stream": request.stream
+        "stream": request.stream,
+        "options": request.options or {}
     }
 
     async with httpx.AsyncClient() as client:
         try:
             response = await client.post(
-                f"{config.OLLAMA_BASE_URL}/api/generate",  # ✅ 이 경로가 Ollama native API
+                f"{endpoint}/api/generate",
                 json=ollama_payload,
                 timeout=180.0
             )
             response.raise_for_status()
             response_data = response.json()
 
-            # ✅ 응답에서 텍스트 추출 후 DB 로그 기록
+            # 로그 저장
             try:
                 ai_response_text = response_data.get("response", "")
                 await database.add_api_log(
                     owner=api_key.get("owner", "unknown"),
-                    model=request.model,
+                    model=model_name,
                     prompt=request.prompt,
                     response=ai_response_text
                 )
@@ -76,9 +85,9 @@ async def generate_completion(
                 print(f"로그 기록 중 에러 발생: {log_e}")
 
             return response_data
-        except httpx.RequestError as e:
-            raise HTTPException(status_code=500, detail=f"Error connecting to Ollama: {e}")
 
+        except httpx.RequestError as e:
+            raise HTTPException(status_code=500, detail=f"Ollama 연결 오류: {e}")
 
 # ==================== 🔥 NEW: Qwen2.5-VL OCR 전용 엔드포인트 ====================
 
