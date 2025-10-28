@@ -3,6 +3,4 @@ uvicorn
 httpx
 pydantic
 python-multipart
-paddleocr[all]
-numpy
 Pillow

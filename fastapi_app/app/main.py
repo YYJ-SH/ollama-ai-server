@@ -306,91 +306,11 @@ async def qwen_health_check(api_key: dict = Depends(get_valid_api_key)):
     }
 
 # ==================== 🚀 NEW: PaddleOCR 엔드포인트 ====================
-from paddleocr import PaddleOCR
-import numpy as np
+
 from PIL import Image
 import io
 import time
 
-# PaddleOCR 인스턴스 초기화 (GPU 사용, 한국어+영어 모델)
-# 서버 시작 시 한 번만 로드되도록 전역으로 선언
-try:
-    print("Initializing PaddleOCR...")
-    paddle_ocr_instance = PaddleOCR(use_angle_cls=True, lang='korean', use_gpu=True)
-    print("PaddleOCR initialized successfully.")
-except Exception as e:
-    print(f"Error initializing PaddleOCR: {e}")
-    paddle_ocr_instance = None
 
-class PaddleOCRResponse(BaseModel):
-    success: bool
-    results: Optional[List[dict]] = None
-    processing_time_ms: float
-    error: Optional[str] = None
 
-@app.post("/v1/paddle/ocr", tags=["PaddleOCR"], response_model=PaddleOCRResponse)
-async def paddle_ocr_endpoint(
-    file: UploadFile = File(..., description="이미지 파일 (PNG, JPG, JPEG)"),
-    api_key: dict = Depends(get_valid_api_key)
-):
-    """
-    PaddleOCR을 사용한 고성능 OCR 엔드포인트
 
-    - GPU 가속 지원 (서버 환경에 따라 설정)
-    - 한국어, 영어, 숫자 등 다국어 인식
-    - 이미지 파일을 직접 업로드하여 OCR 수행
-    """
-    if not paddle_ocr_instance:
-        raise HTTPException(status_code=500, detail="PaddleOCR is not initialized. Check server logs for errors.")
-
-    start_time = time.time()
-
-    # 파일 타입 검증
-    if not file.content_type.startswith('image/'):
-        raise HTTPException(status_code=400, detail="Only image files are supported")
-
-    try:
-        # 이미지 파일 읽기
-        contents = await file.read()
-        
-        # Pillow를 사용하여 이미지 열기
-        img = Image.open(io.BytesIO(contents))
-        
-        # 이미지를 numpy 배열로 변환
-        img_np = np.array(img)
-
-        # PaddleOCR 실행
-        result = paddle_ocr_instance.ocr(img_np, cls=True)
-        
-        processing_time = (time.time() - start_time) * 1000
-
-        # 결과 포맷팅
-        formatted_results = []
-        if result and result[0]:
-            for line in result[0]:
-                box = line[0]
-                text, confidence = line[1]
-                formatted_results.append({
-                    "text": text,
-                    "confidence": round(confidence, 4),
-                    "box": {
-                        "top_left": [int(p) for p in box[0]],
-                        "top_right": [int(p) for p in box[1]],
-                        "bottom_right": [int(p) for p in box[2]],
-                        "bottom_left": [int(p) for p in box[3]],
-                    }
-                })
-
-        return PaddleOCRResponse(
-            success=True,
-            results=formatted_results,
-            processing_time_ms=round(processing_time, 2)
-        )
-
-    except Exception as e:
-        processing_time = (time.time() - start_time) * 1000
-        return PaddleOCRResponse(
-            success=False,
-            processing_time_ms=round(processing_time, 2),
-            error=f"An error occurred during OCR processing: {str(e)}"
-        )
