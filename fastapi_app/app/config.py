@@ -14,3 +14,6 @@ SUPPORTED_MODELS = set(OLLAMA_ENDPOINTS.keys())
 
 # 데이터베이스 파일 위치
 DATABASE_FILE = "/app/database/api_server.db"
+
+# Fallback용 기본 Ollama URL
+OLLAMA_BASE_URL = "http://ollama_gpu0:11434"
