@@ -228,6 +228,7 @@ async def qwen_ocr_file_upload(
     top_p: float = 0.9,
     api_key: dict = Depends(get_valid_api_key)
 ):
+    print(f"Received model in qwen_ocr_file_upload: {model}")
     """
     파일 업로드 방식의 Qwen2.5-VL OCR 엔드포인트
     """
