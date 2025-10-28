@@ -39,6 +39,15 @@ services:
   fastapi_app:
     build: ./fastapi_app
     container_name: fastapi_gateway
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ['0']
+              capabilities: [gpu]
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
     volumes:
       - api_db_data:/app/database
     depends_on:
