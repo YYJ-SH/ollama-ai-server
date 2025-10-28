@@ -1,7 +1,0 @@
-fastapi
-uvicorn
-paddleocr[all]
-numpy
-Pillow
-opencv-python-headless
-httpx
