@@ -32,7 +32,7 @@ services:
     build: ./fastapi_app
     container_name: fastapi_gateway
     ports:
-      - "8000:8000"  # optional if needed externally
+      - "8010:8000"  # 외부에 8010으로 FastAPI 노출 (docs용)
     volumes:
       - api_db_data:/app/database
     restart: always
