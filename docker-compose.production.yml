@@ -1,61 +1,49 @@
-version: '3.8'
+version: "3.9"
 
 services:
-  # GPU 0용 Ollama - llama3, qwen, exaone
+  # GPU 0 - Qwen, LLaMA, Exaone 등
   ollama_gpu0:
     image: ollama/ollama
     container_name: ollama_gpu0
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              device_ids: ['0']
-              capabilities: [gpu]
     ports:
-      - "11436:11434"  # 외부 포트 11436으로 변경 (11434 충돌 회피)
+      - "11436:11434"
     volumes:
       - ollama_gpu0_data:/root/.ollama
     restart: always
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=0
 
-  # GPU 1용 Ollama - gpt-oss:20b
+  # GPU 1 - gpt-oss:20b 전용
   ollama_gpu1:
     image: ollama/ollama
     container_name: ollama_gpu1
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              device_ids: ['1']
-              capabilities: [gpu]
     ports:
       - "11435:11434"
     volumes:
       - ollama_gpu1_data:/root/.ollama
     restart: always
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=1
 
-  # FastAPI 서버
+  # FastAPI Gateway (with optional GPU access, GPU 0)
   fastapi_app:
     build: ./fastapi_app
     container_name: fastapi_gateway
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              device_ids: ['0']
-              capabilities: [gpu]
-    environment:
-      - CUDA_VISIBLE_DEVICES=0
+    ports:
+      - "8000:8000"  # optional if needed externally
     volumes:
       - api_db_data:/app/database
+    restart: always
     depends_on:
       - ollama_gpu0
       - ollama_gpu1
-    restart: always
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=0  # optional if FastAPI doesn't need GPU
 
-  # Nginx 리버스 프록시
+  # NGINX Reverse Proxy
   nginx:
     image: nginx:latest
     container_name: nginx_proxy
