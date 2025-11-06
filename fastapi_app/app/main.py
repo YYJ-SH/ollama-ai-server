@@ -77,15 +77,15 @@ async def generate_completion(
         "model": model_name,
         "prompt": request.prompt,
         "stream": request.stream,
+        "keep_alive": -1,
         "options": request.options or {}
     }
 
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=300.0) as client:
         try:
             response = await client.post(
                 f"{endpoint}/api/generate",
-                json=ollama_payload,
-                timeout=180.0
+                json=ollama_payload
             )
             response.raise_for_status()
             response_data = response.json()
@@ -148,6 +148,7 @@ async def qwen_ocr_endpoint(
             "prompt": request.prompt,
             "images": [request.image_base64],
             "stream": False,
+            "keep_alive": -1,
             "options": {
                 "temperature": request.temperature,
                 "top_p": request.top_p
@@ -158,7 +159,7 @@ async def qwen_ocr_endpoint(
         if not endpoint:
             raise HTTPException(status_code=500, detail=f"모델 '{request.model}'에 대한 Ollama 엔드포인트를 찾을 수 없습니다.")
 
-        async with httpx.AsyncClient(timeout=120.0) as client:
+        async with httpx.AsyncClient(timeout=300.0) as client:
             try:
                 response = await client.post(
                     f"{endpoint}/api/generate",
@@ -199,7 +200,7 @@ async def qwen_ocr_endpoint(
                     ocr_text="",
                     model_used=request.model,
                     processing_time_ms=round((time.time() - start_time) * 1000, 2),
-                    error="OCR processing timeout (120s exceeded)"
+                    error="OCR processing timeout (300s exceeded)"
                 )
             except httpx.RequestError as e:
                 return QwenOCRResponse(
