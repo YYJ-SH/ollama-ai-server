@@ -2,6 +2,7 @@ version: "3.9"
 
 services:
   # GPU 0 - Qwen, LLaMA, Exaone 등
+  ollama_gpu0:
     image: ollama/ollama:latest
     container_name: ollama_gpu0
     ports:
