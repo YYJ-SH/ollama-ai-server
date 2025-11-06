@@ -14,6 +14,7 @@ services:
     environment:
       - NVIDIA_VISIBLE_DEVICES=0
       - OLLAMA_KEEP_ALIVE=1800s
+      - OLLAMA_LOAD_TIMEOUT=1800s
       - OLLAMA_MAX_LOADED_MODELS=2
       - OLLAMA_NUM_PARALLEL=4
 
@@ -30,6 +31,7 @@ services:
     environment:
       - NVIDIA_VISIBLE_DEVICES=1
       - OLLAMA_KEEP_ALIVE=1800s
+      - OLLAMA_LOAD_TIMEOUT=1800s
       - OLLAMA_MAX_LOADED_MODELS=1
       - OLLAMA_NUM_PARALLEL=4
 
