@@ -81,7 +81,7 @@ async def generate_completion(
         "options": request.options or {}
     }
 
-    async with httpx.AsyncClient(timeout=300.0) as client:
+    async with httpx.AsyncClient(timeout=1800.0) as client:
         try:
             response = await client.post(
                 f"{endpoint}/api/generate",
@@ -159,7 +159,7 @@ async def qwen_ocr_endpoint(
         if not endpoint:
             raise HTTPException(status_code=500, detail=f"모델 '{request.model}'에 대한 Ollama 엔드포인트를 찾을 수 없습니다.")
 
-        async with httpx.AsyncClient(timeout=300.0) as client:
+        async with httpx.AsyncClient(timeout=1800.0) as client:
             try:
                 response = await client.post(
                     f"{endpoint}/api/generate",
