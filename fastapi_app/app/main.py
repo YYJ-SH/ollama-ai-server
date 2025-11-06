@@ -113,7 +113,7 @@ class QwenOCRRequest(BaseModel):
     """Qwen2.5-VL OCR 요청 모델"""
     image_base64: str
     prompt: Optional[str] = "이 이미지의 모든 텍스트를 정확히 읽어주세요. 한국어, 영어, 숫자를 모두 포함해서 줄바꿈도 유지해주세요."
-    model: Optional[str] = "qwen2.5vl:7b"
+    model: Optional[str] = "qwen2.5vl:3b"
     temperature: Optional[float] = 0.1
     top_p: Optional[float] = 0.9
 
@@ -200,7 +200,7 @@ async def qwen_ocr_endpoint(
                     ocr_text="",
                     model_used=request.model,
                     processing_time_ms=round((time.time() - start_time) * 1000, 2),
-                    error="OCR processing timeout (300s exceeded)"
+                    error="OCR processing timeout (1800s exceeded)"
                 )
             except httpx.RequestError as e:
                 return QwenOCRResponse(
@@ -224,7 +224,7 @@ async def qwen_ocr_endpoint(
 async def qwen_ocr_file_upload(
     file: UploadFile = File(..., description="이미지 파일 (PNG, JPG, JPEG)"),
     prompt: str = "이 이미지의 모든 텍스트를 정확히 읽어주세요. 한국어, 영어, 숫자를 모두 포함해서 줄바꿈도 유지해주세요.",
-    model: str = "qwen2.5vl:7b",
+    model: str = "qwen2.5vl:3b",
     temperature: float = 0.1,
     top_p: float = 0.9,
     api_key: dict = Depends(get_valid_api_key)
