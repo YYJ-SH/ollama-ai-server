@@ -12,10 +12,9 @@ app = FastAPI(
 )
 
 # 서버 시작 시 DB 초기화
- @app.on_event("startup")
+@app.on_event("startup")
 def on_startup():
     database.init_db()
-
 # API 키 검증을 위한 의존성 주입
 async def get_valid_api_key(x_api_key: str = Header(..., description="Your personal API Key.")):
     if not x_api_key:
@@ -27,7 +26,7 @@ async def get_valid_api_key(x_api_key: str = Header(..., description="Your perso
     return key_info
 
 # [기존] 사용 가능한 모델 리스트 API
- @app.get("/v1/models", tags=["Models"])
+@app.get("/v1/models", tags=["Models"])
 async def list_available_models(api_key: dict = Depends(get_valid_api_key)):
     """
     Ollama 서버에 다운로드된 사용 가능한 모든 모델의 목록을 반환합니다.
@@ -59,7 +58,7 @@ async def list_available_models(api_key: dict = Depends(get_valid_api_key)):
     return {"models": all_models}
 
 # [기존] 메인 생성 API
- @app.post("/v1/generate", tags=["Generation"])
+@app.post("/v1/generate", tags=["Generation"])
 async def generate_completion(
     request: models.OllamaRequest,
     api_key: dict = Depends(get_valid_api_key)
@@ -125,7 +124,7 @@ class QwenOCRResponse(BaseModel):
     processing_time_ms: float
     error: Optional[str] = None
 
- @app.post("/v1/qwen/ocr", tags=["Qwen2.5-VL"], response_model=QwenOCRResponse)
+@app.post("/v1/qwen/ocr", tags=["Qwen2.5-VL"], response_model=QwenOCRResponse)
 async def qwen_ocr_endpoint(
     request: QwenOCRRequest,
     api_key: dict = Depends(get_valid_api_key)
@@ -220,7 +219,7 @@ async def qwen_ocr_endpoint(
             error=f"Server error: {str(e)}"
         )
 
- @app.post("/v1/qwen/ocr-file", tags=["Qwen2.5-VL"], response_model=QwenOCRResponse)
+@app.post("/v1/qwen/ocr-file", tags=["Qwen2.5-VL"], response_model=QwenOCRResponse)
 async def qwen_ocr_file_upload(
     file: UploadFile = File(..., description="이미지 파일 (PNG, JPG, JPEG)"),
     prompt: str = "이 이미지의 모든 텍스트를 정확히 읽어주세요. 한국어, 영어, 숫자를 모두 포함해서 줄바꿈도 유지해주세요.",
@@ -266,7 +265,7 @@ async def qwen_ocr_file_upload(
             error=f"File processing error: {str(e)}"
         )
 
- @app.get("/v1/qwen/health", tags=["Qwen2.5-VL"])
+@app.get("/v1/qwen/health", tags=["Qwen2.5-VL"])
 async def qwen_health_check(api_key: dict = Depends(get_valid_api_key)):
     """
     Qwen2.5-VL 모델 상태 확인
