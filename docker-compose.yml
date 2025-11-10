@@ -1,6 +1,7 @@
 version: "3.9"
 
 services:
+  # GPU 0 - Main LLM
   ollama_gpu0:
     image: ollama/ollama:0.3.13
     container_name: ollama_gpu0
@@ -9,14 +10,8 @@ services:
     volumes:
       - ollama_gpu0_data:/root/.ollama
     restart: always
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - capabilities: [gpu]
     environment:
       - NVIDIA_VISIBLE_DEVICES=0
-      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
       - OLLAMA_LLM_LIBRARY=cuda_v12
       - OLLAMA_GPU_LAYERS=18
       - OLLAMA_FLASH_ATTENTION=false
@@ -24,22 +19,42 @@ services:
       - OLLAMA_NUM_PARALLEL=1
       - OLLAMA_MAX_LOADED_MODELS=1
       - OLLAMA_DEBUG=INFO
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    device_requests:
+      - driver: nvidia
+        count: 1
+        capabilities: [gpu]
 
+  # GPU 1 - Secondary LLM (e.g., 20B)
   ollama_gpu1:
-    image: ollama/ollama
+    image: ollama/ollama:0.3.13
     container_name: ollama_gpu1
     ports:
       - "11435:11434"
     volumes:
       - ollama_gpu1_data:/root/.ollama
     restart: always
-    runtime: nvidia
     environment:
       - NVIDIA_VISIBLE_DEVICES=1
       - OLLAMA_KEEP_ALIVE=-1
       - OLLAMA_MAX_LOADED_MODELS=1
       - OLLAMA_NUM_PARALLEL=4
+      - OLLAMA_LLM_LIBRARY=cuda_v12
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: [gpu]
+    device_requests:
+      - driver: nvidia
+        count: 1
+        capabilities: [gpu]
 
+  # FastAPI Gateway
   fastapi_app:
     build: ./fastapi_app
     container_name: fastapi_gateway
@@ -51,10 +66,14 @@ services:
     depends_on:
       - ollama_gpu0
       - ollama_gpu1
-    runtime: nvidia
     environment:
       - NVIDIA_VISIBLE_DEVICES=0
+    device_requests:
+      - driver: nvidia
+        count: 1
+        capabilities: [gpu]
 
+  # NGINX Reverse Proxy
   nginx:
     image: nginx:latest
     container_name: nginx_proxy
