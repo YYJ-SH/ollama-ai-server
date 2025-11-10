@@ -12,18 +12,17 @@ services:
     restart: always
     runtime: nvidia
     environment:
-      # GPU 0 고정
       - NVIDIA_VISIBLE_DEVICES=0
       - NVIDIA_DRIVER_CAPABILITIES=all
+      - OLLAMA_LLM_LIBRARY=cuda_v12       # ✅ CUDA 12 backend 고정
+      - OLLAMA_KEEP_ALIVE=10m
+      - OLLAMA_NUM_PARALLEL=1
+      - OLLAMA_MAX_LOADED_MODELS=1
+      - OLLAMA_BATCH_SIZE=256             # ✅ 작게 줄이기
+      - OLLAMA_KV_SIZE=2048               # ✅ 작게 줄이기
+      - OLLAMA_FLASH_ATTENTION=false
+      - OLLAMA_DEBUG=INFO
 
-      # 안정성 중심 설정
-      - OLLAMA_NEW_ENGINE=true          # 최신 엔진 사용 (hang 대응)
-      - OLLAMA_KEEP_ALIVE=10m           # 세션 10분 유지 후 정리
-      - OLLAMA_NUM_PARALLEL=1           # 병렬 요청 1개로 제한
-      - OLLAMA_MAX_LOADED_MODELS=1      # 한 번에 한 모델만 로드
-      - OLLAMA_LOAD_TIMEOUT=10m         # 모델 로드 타임아웃 확대
-      - OLLAMA_FLASH_ATTENTION=false    # CUDA 13 + 3060 안정화
-      - OLLAMA_DEBUG=INFO               # 디버그 로그 활성화
 
   # GPU 1 - gpt-oss:20b 전용 (건드리지 않음)
   ollama_gpu1:
